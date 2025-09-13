@@ -1,0 +1,393 @@
+-- All-in-One Script: Infinite Sprint / ESP / Silent Aim / FOV / Copy Discord / Draggable UI
+-- EXPLOIT ONLY: getgc, setclipboard, Drawing
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- ===== SETTINGS =====
+local modifierEnabled = false
+local loopConnection = nil
+
+local espEnabled = false
+local espPlayersEnabled = true
+local espToolsEnabled = true
+local playerESP = {}
+local toolESP = {}
+
+local silentAimEnabled = false
+local fovEnabled = true
+local fovRadius = 150
+local fovCircle = nil
+
+-- ===== HELPER FUNCTIONS =====
+local function findTablesWithS()
+    local tables = {}
+    for _, tbl in getgc(true) do
+        if typeof(tbl) == "table" and rawget(tbl, "S") then
+            if typeof(rawget(tbl, "S")) == "number" then
+                table.insert(tables, tbl)
+            end
+        end
+    end
+    return tables
+end
+
+-- ===== MODIFIER =====
+local function startModifier()
+    if loopConnection then loopConnection:Disconnect() loopConnection = nil end
+    if not modifierEnabled then return end
+    local tables = findTablesWithS()
+    loopConnection = RunService.Heartbeat:Connect(function()
+        for _, tbl in tables do
+            rawset(tbl, "S", 100)
+        end
+    end)
+end
+
+local function stopModifier()
+    if loopConnection then loopConnection:Disconnect() loopConnection = nil end
+end
+
+-- ===== DRAWING / ESP =====
+local function createTextDrawing()
+    local d = Drawing.new("Text")
+    d.Size = 16
+    d.Center = true
+    d.Outline = true
+    d.Visible = true
+    d.ZIndex = 2
+    return d
+end
+
+local function createSquareDrawing()
+    local d = Drawing.new("Square")
+    d.Thickness = 1
+    d.Filled = false
+    d.Visible = true
+    d.ZIndex = 2
+    return d
+end
+
+local function worldToViewport(pos)
+    local screenPoint, onScreen = Camera:WorldToViewportPoint(pos)
+    return Vector2.new(screenPoint.X, screenPoint.Y), onScreen, screenPoint.Z
+end
+
+-- Player ESP
+local function addPlayerESP(plr)
+    if not plr or not plr.Character then return end
+    if playerESP[plr.UserId] then return end
+    local text = createTextDrawing()
+    local box = createSquareDrawing()
+    playerESP[plr.UserId] = {text = text, box = box, plr = plr}
+end
+
+local function removePlayerESP(plr)
+    local data = playerESP[plr.UserId]
+    if data then
+        pcall(function() if data.text then data.text:Remove() end end)
+        pcall(function() if data.box then data.box:Remove() end end)
+        playerESP[plr.UserId] = nil
+    end
+end
+
+-- Tool ESP
+local function addToolESP(inst)
+    if toolESP[inst] then return end
+    local txt = createTextDrawing()
+    txt.Size = 14
+    txt.Center = true
+    txt.Text = inst.Name
+    toolESP[inst] = {text = txt, inst = inst}
+end
+
+local function removeToolESP(inst)
+    local data = toolESP[inst]
+    if data then
+        pcall(function() if data.text then data.text:Remove() end end)
+        toolESP[inst] = nil
+    end
+end
+
+local function clearAllESP()
+    for _, data in pairs(playerESP) do
+        pcall(function() if data.text then data.text:Remove() end end)
+        pcall(function() if data.box then data.box:Remove() end end)
+    end
+    playerESP = {}
+    for _, data in pairs(toolESP) do
+        pcall(function() if data.text then data.text:Remove() end end)
+    end
+    toolESP = {}
+end
+
+local espConnection
+local function updateESP()
+    -- Players
+    if espPlayersEnabled and espEnabled then
+        for _, plr in pairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character:FindFirstChild("Humanoid") and plr.Character.Humanoid.Health > 0 then
+                if not playerESP[plr.UserId] then addPlayerESP(plr) end
+                local data = playerESP[plr.UserId]
+                local hrp = plr.Character.HumanoidRootPart
+                local topPos = hrp.Position + Vector3.new(0,2,0)
+                local bottomPos = hrp.Position - Vector3.new(0,1,0)
+                local top2d, topOn = worldToViewport(topPos)
+                local bot2d, botOn = worldToViewport(bottomPos)
+                if topOn and botOn then
+                    local height = math.abs(top2d.Y - bot2d.Y)
+                    local width = math.clamp(height*0.5,20,120)
+                    data.box.Size = Vector2.new(width,height)
+                    data.box.Position = top2d - Vector2.new(width/2,0)
+                    data.box.Visible = true
+                    data.text.Position = top2d - Vector2.new(0,12)
+                    data.text.Text = plr.Name
+                    data.text.Visible = true
+                else
+                    data.box.Visible = false
+                    data.text.Visible = false
+                end
+            else
+                removePlayerESP(plr)
+            end
+        end
+    else
+        for _, plr in pairs(Players:GetPlayers()) do removePlayerESP(plr) end
+    end
+
+    -- Tools
+    if espToolsEnabled and espEnabled then
+        for _, inst in pairs(workspace:GetDescendants()) do
+            if (inst:IsA("Tool") or inst:IsA("Model")) and inst.PrimaryPart then
+                if not toolESP[inst] then addToolESP(inst) end
+                local data = toolESP[inst]
+                local pos = inst.PrimaryPart.Position
+                local p2d, onScreen = worldToViewport(pos)
+                if onScreen then
+                    data.text.Position = p2d
+                    data.text.Visible = true
+                    data.text.Text = inst.Name
+                else
+                    data.text.Visible = false
+                end
+            end
+        end
+        for inst,_ in pairs(toolESP) do
+            if not inst:IsDescendantOf(game) then removeToolESP(inst) end
+        end
+    else
+        for inst,_ in pairs(toolESP) do removeToolESP(inst) end
+    end
+end
+
+local function startESP()
+    if espConnection then espConnection:Disconnect() espConnection = nil end
+    if not espEnabled then return end
+    espConnection = RunService.RenderStepped:Connect(function()
+        pcall(updateESP)
+    end)
+end
+
+local function stopESP()
+    if espConnection then espConnection:Disconnect() espConnection = nil end
+    clearAllESP()
+end
+
+-- ===== SILENT AIM & FOV =====
+fovCircle = Drawing.new("Circle")
+fovCircle.Thickness = 2
+fovCircle.Filled = false
+fovCircle.Color = Color3.fromRGB(0,255,0)
+fovCircle.NumSides = 64
+fovCircle.Visible = fovEnabled
+fovCircle.ZIndex = 2
+
+local function getClosestPlayerToCursor()
+    local closestDist = math.huge
+    local targetPlayer = nil
+    local mousePos = UserInputService:GetMouseLocation()
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character:FindFirstChild("Humanoid") and plr.Character.Humanoid.Health > 0 then
+            local hrpPos = plr.Character.HumanoidRootPart.Position
+            local screenPos, onScreen = worldToViewport(hrpPos)
+            if onScreen then
+                local dist = (Vector2.new(screenPos.X, screenPos.Y)-mousePos).Magnitude
+                if dist<closestDist and dist<=fovRadius then
+                    closestDist = dist
+                    targetPlayer = plr
+                end
+            end
+        end
+    end
+    return targetPlayer
+end
+
+local function getSilentAimTarget()
+    if not silentAimEnabled then return nil end
+    local target = getClosestPlayerToCursor()
+    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        return target.Character.HumanoidRootPart.Position
+    end
+    return nil
+end
+
+RunService.RenderStepped:Connect(function()
+    if fovEnabled then
+        local mousePos = UserInputService:GetMouseLocation()
+        fovCircle.Position = mousePos
+        fovCircle.Radius = fovRadius
+        fovCircle.Visible = true
+    else
+        fovCircle.Visible = false
+    end
+end)
+
+-- ===== UI =====
+local function makeGui()
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "AllInOneGUI"
+    gui.ResetOnSpawn = false
+    gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+    local frame = Instance.new("Frame", gui)
+    frame.Size = UDim2.new(0, 260, 0, 260)
+    frame.Position = UDim2.new(0.5, -130, 0.15, 0)
+    frame.BackgroundColor3 = Color3.fromRGB(35,35,35)
+    frame.BorderSizePixel = 0
+    frame.Active = true
+
+    local title = Instance.new("TextLabel", frame)
+    title.Size = UDim2.new(1,0,0,24)
+    title.BackgroundTransparency = 1
+    title.Text = "All-In-One Mod Menu"
+    title.Font = Enum.Font.SourceSansBold
+    title.TextSize = 18
+    title.TextColor3 = Color3.new(1,1,1)
+
+    -- Modifier toggle
+    local modBtn = Instance.new("TextButton", frame)
+    modBtn.Size = UDim2.new(0,120,0,30)
+    modBtn.Position = UDim2.new(0.05,0,0.1,0)
+    modBtn.Text = "Modifier: OFF"
+    modBtn.MouseButton1Click:Connect(function()
+        modifierEnabled = not modifierEnabled
+        modBtn.Text = "Modifier: "..(modifierEnabled and "ON" or "OFF")
+        if modifierEnabled then startModifier() else stopModifier() end
+    end)
+
+    -- ESP toggle
+    local espBtn = Instance.new("TextButton", frame)
+    espBtn.Size = UDim2.new(0,120,0,30)
+    espBtn.Position = UDim2.new(0.55,0,0.1,0)
+    espBtn.Text = "ESP: OFF"
+    espBtn.MouseButton1Click:Connect(function()
+        espEnabled = not espEnabled
+        espBtn.Text = "ESP: "..(espEnabled and "ON" or "OFF")
+        if espEnabled then startESP() else stopESP() end
+    end)
+
+    -- Silent Aim toggle
+    local saBtn = Instance.new("TextButton", frame)
+    saBtn.Size = UDim2.new(0,120,0,30)
+    saBtn.Position = UDim2.new(0.05,0,0.25,0)
+    saBtn.Text = "Silent Aim: OFF"
+    saBtn.MouseButton1Click:Connect(function()
+        silentAimEnabled = not silentAimEnabled
+        saBtn.Text = "Silent Aim: "..(silentAimEnabled and "ON" or "OFF")
+    end)
+
+    -- FOV toggle
+    local fovBtn = Instance.new("TextButton", frame)
+    fovBtn.Size = UDim2.new(0,120,0,30)
+    fovBtn.Position = UDim2.new(0.55,0,0.25,0)
+    fovBtn.Text = "FOV: ON"
+    fovBtn.MouseButton1Click:Connect(function()
+        fovEnabled = not fovEnabled
+        fovBtn.Text = "FOV: "..(fovEnabled and "ON" or "OFF")
+    end)
+
+    -- FOV slider
+    local sliderFrame = Instance.new("Frame", frame)
+    sliderFrame.Size = UDim2.new(0,200,0,20)
+    sliderFrame.Position = UDim2.new(0.05,0,0.4,0)
+    sliderFrame.BackgroundColor3 = Color3.fromRGB(60,60,60)
+    local sliderFill = Instance.new("Frame", sliderFrame)
+    sliderFill.Size = UDim2.new(fovRadius/300,0,1,0)
+    sliderFill.BackgroundColor3 = Color3.fromRGB(0,255,0)
+
+    local dragging = false
+    sliderFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true end
+    end)
+    sliderFrame.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType==Enum.UserInputType.MouseMovement then
+            local mouseX = input.Position.X
+            local sliderX = math.clamp(mouseX - sliderFrame.AbsolutePosition.X,0,sliderFrame.AbsoluteSize.X)
+            sliderFill.Size = UDim2.new(sliderX/sliderFrame.AbsoluteSize.X,0,1,0)
+            fovRadius = sliderX/sliderFrame.AbsoluteSize.X*300
+        end
+    end)
+
+    -- Copy Discord button
+    local copyBtn = Instance.new("TextButton", frame)
+    copyBtn.Size = UDim2.new(0,120,0,30)
+    copyBtn.Position = UDim2.new(0.05,0,0.6,0)
+    copyBtn.Text = "Copy Discord"
+    copyBtn.MouseButton1Click:Connect(function()
+        if setclipboard then
+            pcall(function() setclipboard("https://discord.gg/b6fKAnYqtU") end)
+        end
+        copyBtn.Text = "Copied!"
+        task.delay(1.5,function() copyBtn.Text = "Copy Discord" end)
+    end)
+
+    -- Draggable frame
+    local drag, dragInput, dragStart, startPos
+    local function update(input)
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,
+                                   startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType==Enum.UserInputType.MouseButton1 then
+            drag = true
+            dragStart = input.Position
+            startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState==Enum.UserInputState.End then drag=false end
+            end)
+        end
+    end)
+    frame.InputChanged:Connect(function(input)
+        if input.UserInputType==Enum.UserInputType.MouseMovement then dragInput=input end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input==dragInput and drag then update(input) end
+    end)
+end
+
+makeGui()
+
+-- ===== RESPAWN HANDLING =====
+local function onCharacterAdded(char)
+    local humanoid = char:FindFirstChildWhichIsA("Humanoid") or char:WaitForChild("Humanoid")
+    local diedConn
+    diedConn = humanoid.Died:Connect(function()
+        stopModifier()
+        stopESP()
+        if diedConn then diedConn:Disconnect(); diedConn=nil end
+    end)
+    task.delay(0.5,function()
+        if modifierEnabled then startModifier() end
+        if espEnabled then startESP() end
+    end)
+end
+
+if LocalPlayer.Character then onCharacterAdded(LocalPlayer.Character) end
+LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
