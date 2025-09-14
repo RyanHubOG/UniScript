@@ -276,14 +276,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- =========================
--- Toggle GUI with K
-UIS.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    if input.KeyCode==Enum.KeyCode.K then
-        window.Visible=not window.Visible
-    end
-end)
 
 -- =========================
 print("✅ UniScript BETA: UI + Features Loaded Safely")
