@@ -1,5 +1,5 @@
 -- =========================
--- UniScript BETA — Safe Load Version
+-- UniScript BETA 
 -- =========================
 
 local Players = game:GetService("Players")
@@ -8,7 +8,7 @@ local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 
--- Ensure PlayerGui is ready
+
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 -- =========================
@@ -27,7 +27,7 @@ local Settings = {
     PlayerFOV = Camera.FieldOfView or 70
 }
 
-local showFOV = false -- Show Aimlock FOV toggle
+local showFOV = false 
 local aiming = false
 
 -- =========================
