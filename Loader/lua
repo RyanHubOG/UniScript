@@ -1,4 +1,4 @@
--- UniScript BETA Full Features Wiring
+-- UniScript BETA Full Features Wiring f
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
