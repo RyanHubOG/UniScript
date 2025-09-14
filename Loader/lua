@@ -1,5 +1,5 @@
 -- UniScript BETA — Rayfield-style draggable UI (fixed title + layout)
--- Clean UI with draggable window, auto-aligned controls
+-- Clean UI with draggable window, auto-aligned controls yes
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
