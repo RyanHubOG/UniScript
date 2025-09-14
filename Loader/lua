@@ -1,12 +1,13 @@
--- UniScript BETA — Rayfield-style draggable UI (offline)
--- Creates a Rayfield-like interface, draggable, with tabs, toggles and sliders.
+-- UniScript BETA — Rayfield-style draggable UI (fixed title + layout)
+-- Clean UI with draggable window, auto-aligned controls
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- Settings table (controls updated by the UI)
+-- Settings table
 local Settings = {
     ESPEnabled = false,
     AimlockEnabled = false,
@@ -20,13 +21,7 @@ local Settings = {
     PlayerFOV = Camera.FieldOfView or 70
 }
 
--- Safe helper
-local function safeCall(fn, name)
-    local ok, err = pcall(fn)
-    if not ok then warn(("UI error [%s]: %s"):format(name or "unknown", tostring(err))) end
-end
-
--- create helper
+-- helper
 local function make(parent, class, props)
     local obj = Instance.new(class)
     if props then for k,v in pairs(props) do obj[k] = v end end
@@ -34,52 +29,48 @@ local function make(parent, class, props)
     return obj
 end
 
--- create ScreenGui in PlayerGui (safer)
-local screenGui = make(LocalPlayer:WaitForChild("PlayerGui"), "ScreenGui", {Name = "UniScriptGUI", ResetOnSpawn = false})
+local screenGui = make(LocalPlayer:WaitForChild("PlayerGui"), "ScreenGui", {
+    Name = "UniScriptGUI",
+    ResetOnSpawn = false
+})
 
 -- Main window
 local window = make(screenGui, "Frame", {
-    Name = "Window",
     Size = UDim2.new(0, 580, 0, 380),
     Position = UDim2.new(0.06, 0, 0.12, 0),
     BackgroundColor3 = Color3.fromRGB(18, 18, 20),
     BorderSizePixel = 0
 })
-
 make(window, "UICorner", {CornerRadius = UDim.new(0, 8)})
+
 -- title bar
 local titleBar = make(window, "Frame", {
     Size = UDim2.new(1,0,0,44),
-    Position = UDim2.new(0,0,0,0),
     BackgroundColor3 = Color3.fromRGB(12,12,14),
     BorderSizePixel = 0
 })
-make(titleBar, "UIStroke", {Color = Color3.fromRGB(30,30,30), Thickness = 1, Transparency = 0.4})
-make(titleBar, "UIGradient", {Color = ColorSequence.new(Color3.fromRGB(16,16,18), Color3.fromRGB(12,12,14)), Rotation = 90})
-
 local titleLabel = make(titleBar, "TextLabel", {
     Size = UDim2.new(1, -120, 1, 0),
     Position = UDim2.new(0, 20, 0, 0),
     BackgroundTransparency = 1,
-    Text = "Criminality Enhancer — UniScript BETA",
+    Text = "UniScript BETA",
     TextColor3 = Color3.fromRGB(230,230,230),
     Font = Enum.Font.SourceSansBold,
     TextSize = 18,
     TextXAlignment = Enum.TextXAlignment.Left
 })
-
 local subtitle = make(titleBar, "TextLabel", {
-    Size = UDim2.new(0, 200, 1, 0),
-    Position = UDim2.new(1, -200, 0, 0),
+    Size = UDim2.new(0, 260, 1, 0),
+    Position = UDim2.new(1, -260, 0, 0),
     BackgroundTransparency = 1,
-    Text = "UniScript is loading...  |  by Ryan",
+    Text = "By Ryan",
     TextColor3 = Color3.fromRGB(160,160,160),
     Font = Enum.Font.SourceSans,
     TextSize = 13,
     TextXAlignment = Enum.TextXAlignment.Right
 })
 
--- left sidebar (tabs)
+-- Sidebar
 local sidebar = make(window, "Frame", {
     Size = UDim2.new(0, 170, 1, -44),
     Position = UDim2.new(0,0,0,44),
@@ -87,229 +78,169 @@ local sidebar = make(window, "Frame", {
     BorderSizePixel = 0
 })
 make(sidebar, "UICorner", {CornerRadius = UDim.new(0, 6)})
-local sidebarLayout = make(sidebar, "UIListLayout", {Padding = UDim.new(0, 8)})
-sidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder
-sidebarLayout.Padding = UDim.new(0, 8)
-sidebarLayout.Parent = sidebar
+local sidebarLayout = make(sidebar, "UIListLayout", {Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder})
 
--- content area
+-- Content
 local content = make(window, "Frame", {
-    Size = UDim2.new(1, -180, 1, -64),
-    Position = UDim2.new(0, 180, 0, 54),
+    Size = UDim2.new(1, -180, 1, -54),
+    Position = UDim2.new(0, 180, 0, 50),
     BackgroundTransparency = 1
 })
 
--- small header under title
-local header = make(window, "Frame", {
-    Size = UDim2.new(1, -20, 0, 8),
-    Position = UDim2.new(0, 10, 0, 46),
-    BackgroundColor3 = Color3.fromRGB(30,30,35),
-    BorderSizePixel = 0
-})
-make(header, "UICorner", {CornerRadius = UDim.new(0, 6)})
+-- Create pages with UIListLayout
+local pages = {}
+local function makePage()
+    local p = make(content, "ScrollingFrame", {
+        Size = UDim2.new(1,0,1,0),
+        CanvasSize = UDim2.new(0,0,0,0),
+        BackgroundTransparency = 1,
+        Visible = false,
+        ScrollBarThickness = 6
+    })
+    local layout = make(p, "UIListLayout", {Padding = UDim.new(0, 8)})
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        p.CanvasSize = UDim2.new(0,0,0,layout.AbsoluteContentSize.Y+10)
+    end)
+    pages[#pages+1] = p
+    return p
+end
 
--- tab buttons - Rayfield style (icon + label)
-local function makeTabButton(text)
+local combatPage = makePage()
+combatPage.Visible = true
+local miscPage = makePage()
+local extrasPage = makePage()
+
+-- tab button
+local function makeTabButton(text, page)
     local btn = make(sidebar, "TextButton", {
         Size = UDim2.new(1, -16, 0, 44),
         BackgroundColor3 = Color3.fromRGB(28,28,32),
         BorderSizePixel = 0,
-        Text = "",
-        AutoButtonColor = false
+        Text = text,
+        TextColor3 = Color3.fromRGB(220,220,220),
+        Font = Enum.Font.SourceSansBold,
+        TextSize = 15
     })
     make(btn, "UICorner", {CornerRadius = UDim.new(0,6)})
-    local inner = make(btn, "Frame", {Size = UDim2.new(1, -12, 1, 0), Position = UDim2.new(0, 6, 0, 0), BackgroundTransparency = 1})
-    local icon = make(inner, "Frame", {Size = UDim2.new(0, 40, 0, 40), Position = UDim2.new(0, 0, 0, 2), BackgroundColor3 = Color3.fromRGB(40,40,46)})
-    make(icon, "UICorner", {CornerRadius = UDim.new(0,6)})
-    local label = make(inner, "TextLabel", {Size = UDim2.new(1, -48, 1, 0), Position = UDim2.new(0, 48, 0, 0), BackgroundTransparency = 1,
-        Text = text, TextColor3 = Color3.fromRGB(220,220,220), Font = Enum.Font.SourceSansSemibold, TextSize = 15, TextXAlignment = Enum.TextXAlignment.Left})
-    return btn, icon, label
-end
-
-local combatBtn, _, _ = makeTabButton("Combat")
-local miscBtn, _, _ = makeTabButton("Misc")
-local extrasBtn, _, _ = makeTabButton("Extras")
-
--- pages to put controls in
-local pages = {}
-local function makePage(name)
-    local p = make(content, "Frame", {
-        Size = UDim2.new(1,0,1,0),
-        BackgroundTransparency = 1,
-        Visible = false
-    })
-    pages[name] = p
-    return p
-end
-local combatPage = makePage("Combat")
-local miscPage = makePage("Misc")
-local extrasPage = makePage("Extras")
-combatPage.Visible = true
-
--- simple row helper
-local function addRow(parent, y)
-    local frame = make(parent, "Frame", {Size = UDim2.new(1, -10, 0, 34), Position = UDim2.new(0, 10, 0, y), BackgroundTransparency = 1})
-    return frame
-end
-
--- toggle control (Rayfield-like appearance)
-local function addToggle(parent, y, labelText, initial, callback)
-    local row = addRow(parent, y)
-    local lbl = make(row, "TextLabel", {Size = UDim2.new(0.6, 0, 1, 0), BackgroundTransparency = 1, Text = labelText, TextColor3 = Color3.fromRGB(220,220,220), Font = Enum.Font.SourceSans, TextSize = 15, TextXAlignment = Enum.TextXAlignment.Left})
-    local btn = make(row, "TextButton", {Size = UDim2.new(0, 70, 0, 22), Position = UDim2.new(1, -80, 0, 6), BackgroundColor3 = initial and Color3.fromRGB(60,160,60) or Color3.fromRGB(60,60,65), Text = initial and "ON" or "OFF", TextColor3 = Color3.fromRGB(240,240,240), Font = Enum.Font.SourceSansBold, TextSize = 14, BorderSizePixel = 0})
-    make(btn, "UICorner", {CornerRadius = UDim.new(0, 6)})
     btn.MouseButton1Click:Connect(function()
-        local val = not (btn.Text == "ON")
-        btn.Text = val and "ON" or "OFF"
-        btn.BackgroundColor3 = val and Color3.fromRGB(60,160,60) or Color3.fromRGB(60,60,65)
-        safeCall(function() callback(val) end, "toggle "..labelText)
+        for _,p in pairs(pages) do p.Visible = false end
+        for _,b in pairs(sidebar:GetChildren()) do if b:IsA("TextButton") then b.BackgroundColor3 = Color3.fromRGB(28,28,32) end end
+        btn.BackgroundColor3 = Color3.fromRGB(40,40,46)
+        page.Visible = true
     end)
     return btn
 end
 
--- slider control with drag
-local function addSlider(parent, y, labelText, minv, maxv, default, callback)
-    local row = addRow(parent, y)
-    local lbl = make(row, "TextLabel", {Size = UDim2.new(0.45, 0, 1, 0), BackgroundTransparency = 1, Text = labelText, TextColor3 = Color3.fromRGB(220,220,220), Font = Enum.Font.SourceSans, TextSize = 15, TextXAlignment = Enum.TextXAlignment.Left})
-    local valueLbl = make(row, "TextLabel", {Size = UDim2.new(0, 60, 1, 0), Position = UDim2.new(1, -150, 0, 0), BackgroundTransparency = 1, Text = tostring(default), TextColor3 = Color3.fromRGB(200,200,200), Font = Enum.Font.SourceSans, TextSize = 14})
-    local barFrame = make(row, "Frame", {Size = UDim2.new(0, 220, 0, 10), Position = UDim2.new(1, -140, 0.5, -5), BackgroundColor3 = Color3.fromRGB(45,45,50), BorderSizePixel = 0})
-    make(barFrame, "UICorner", {CornerRadius = UDim.new(0, 6)})
-    local fill = make(barFrame, "Frame", {Size = UDim2.new( (default - minv) / (maxv - minv), 0, 1, 0), BackgroundColor3 = Color3.fromRGB(100,150,255), BorderSizePixel = 0})
-    make(fill, "UICorner", {CornerRadius = UDim.new(0, 6)})
+makeTabButton("Combat", combatPage).BackgroundColor3 = Color3.fromRGB(40,40,46)
+makeTabButton("Misc", miscPage)
+makeTabButton("Extras", extrasPage)
 
+-- control builders
+local function addToggle(parent, text, callback)
+    local btn = make(parent, "TextButton", {
+        Size = UDim2.new(1, -10, 0, 32),
+        BackgroundColor3 = Color3.fromRGB(32,32,36),
+        Text = text.." [OFF]",
+        TextColor3 = Color3.fromRGB(220,220,220),
+        Font = Enum.Font.SourceSans,
+        TextSize = 15
+    })
+    make(btn, "UICorner", {CornerRadius = UDim.new(0,6)})
+    local state = false
+    btn.MouseButton1Click:Connect(function()
+        state = not state
+        btn.Text = text .. (state and " [ON]" or " [OFF]")
+        callback(state)
+    end)
+end
+
+local function addSlider(parent, text, min, max, default, callback)
+    local frame = make(parent, "Frame", {Size = UDim2.new(1, -10, 0, 50), BackgroundTransparency = 1})
+    local label = make(frame, "TextLabel", {Size = UDim2.new(1,0,0,20), BackgroundTransparency = 1, Text = text..": "..default, TextColor3 = Color3.fromRGB(220,220,220), Font = Enum.Font.SourceSans, TextSize = 14})
+    local bar = make(frame, "Frame", {Size = UDim2.new(1,0,0,8), Position = UDim2.new(0,0,0,28), BackgroundColor3 = Color3.fromRGB(50,50,55)})
+    make(bar, "UICorner", {CornerRadius = UDim.new(0,4)})
+    local fill = make(bar, "Frame", {Size = UDim2.new((default-min)/(max-min),0,1,0), BackgroundColor3 = Color3.fromRGB(100,150,255)})
+    make(fill, "UICorner", {CornerRadius = UDim.new(0,4)})
     local dragging = false
-    local function updateFromPos(absX)
-        local absPos = barFrame.AbsolutePosition.X
-        local absSize = barFrame.AbsoluteSize.X
-        local rel = math.clamp((absX - absPos) / absSize, 0, 1)
-        local val = minv + rel * (maxv - minv)
-        -- round sensible
-        if maxv - minv <= 1 then
-            val = math.floor(val * 100) / 100
-        else
-            val = math.floor(val)
-        end
-        fill.Size = UDim2.new(rel, 0, 1, 0)
-        valueLbl.Text = tostring(val)
-        safeCall(function() callback(val) end, "slider "..labelText)
+    local function update(x)
+        local rel = math.clamp((x - bar.AbsolutePosition.X)/bar.AbsoluteSize.X, 0, 1)
+        local val = math.floor(min + rel*(max-min))
+        fill.Size = UDim2.new(rel,0,1,0)
+        label.Text = text..": "..val
+        callback(val)
     end
-
-    barFrame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+    bar.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = true
-            updateFromPos(input.Position.X)
+            update(i.Position.X)
         end
     end)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            updateFromPos(input.Position.X)
+    UserInputService.InputChanged:Connect(function(i)
+        if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+            update(i.Position.X)
         end
     end)
-    UserInputService.InputEnded:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseButton1 then
+    UserInputService.InputEnded:Connect(function(i)
+        if dragging and i.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = false
         end
     end)
-
-    return {frame = row, label = lbl, value = valueLbl, bar = barFrame, fill = fill}
 end
 
--- Populate Combat page (y offsets)
-local y = 6
-addToggle(combatPage, y, "Aimlock", false, function(v) Settings.AimlockEnabled = v end); y = y + 42
-addSlider(combatPage, y, "Aimlock FOV", 50, 500, Settings.AimlockFOV, function(v) Settings.AimlockFOV = v end); y = y + 50
-addSlider(combatPage, y, "Prediction", 0, 1, Settings.AimlockPrediction, function(v) Settings.AimlockPrediction = v end); y = y + 50
-addToggle(combatPage, y, "Wallbang", false, function(v) Settings.WallbangEnabled = v end); y = y + 42
-addToggle(combatPage, y, "Melee Aura", false, function(v) Settings.MeleeAuraEnabled = v end); y = y + 42
-addSlider(combatPage, y, "Melee Reach", 1, 30, Settings.MeleeReach, function(v) Settings.MeleeReach = v end); y = y + 50
+-- Populate combat
+addToggle(combatPage, "Aimlock", function(v) Settings.AimlockEnabled = v end)
+addSlider(combatPage, "Aimlock FOV", 50, 500, Settings.AimlockFOV, function(v) Settings.AimlockFOV = v end)
+addSlider(combatPage, "Prediction", 0, 100, Settings.AimlockPrediction*100, function(v) Settings.AimlockPrediction = v/100 end)
+addToggle(combatPage, "Wallbang", function(v) Settings.WallbangEnabled = v end)
+addToggle(combatPage, "Melee Aura", function(v) Settings.MeleeAuraEnabled = v end)
+addSlider(combatPage, "Melee Reach", 1, 30, Settings.MeleeReach, function(v) Settings.MeleeReach = v end)
 
--- Populate Misc
-y = 6
-addToggle(miscPage, y, "NoClip", false, function(v) Settings.NoClipEnabled = v end); y = y + 42
-addToggle(miscPage, y, "Infinite Sprint", false, function(v) Settings.InfiniteSprint = v end); y = y + 42
-addSlider(miscPage, y, "Player FOV", 70, 120, Settings.PlayerFOV, function(v) Settings.PlayerFOV = v Camera.FieldOfView = v end); y = y + 50
-addToggle(miscPage, y, "ESP", false, function(v) Settings.ESPEnabled = v end); y = y + 42
+-- misc
+addToggle(miscPage, "NoClip", function(v) Settings.NoClipEnabled = v end)
+addToggle(miscPage, "Infinite Sprint", function(v) Settings.InfiniteSprint = v end)
+addSlider(miscPage, "Player FOV", 70, 120, Settings.PlayerFOV, function(v) Settings.PlayerFOV = v Camera.FieldOfView = v end)
+addToggle(miscPage, "ESP", function(v) Settings.ESPEnabled = v end)
 
--- Extras
-local copyBtn = make(extrasPage, "TextButton", {Size = UDim2.new(0, 240, 0, 34), Position = UDim2.new(0, 10, 0, 6), BackgroundColor3 = Color3.fromRGB(60,60,70), Text = "Copy Discord", Font = Enum.Font.SourceSansBold, TextSize = 16, BorderSizePixel = 0})
+-- extras
+local copyBtn = make(extrasPage, "TextButton", {Size = UDim2.new(0,240,0,34), BackgroundColor3 = Color3.fromRGB(60,60,70), Text = "Copy Discord", TextColor3 = Color3.fromRGB(230,230,230)})
 make(copyBtn, "UICorner", {CornerRadius = UDim.new(0,6)})
-copyBtn.MouseButton1Click:Connect(function() pcall(function() setclipboard("https://discord.gg/dJEM47ZtGa") end) end)
-
-local unloadBtn = make(extrasPage, "TextButton", {Size = UDim2.new(0, 240, 0, 34), Position = UDim2.new(0, 10, 0, 56), BackgroundColor3 = Color3.fromRGB(165,65,65), Text = "Unload Script", Font = Enum.Font.SourceSansBold, TextSize = 16, BorderSizePixel = 0})
+copyBtn.MouseButton1Click:Connect(function()
+    pcall(function() setclipboard("https://discord.gg/dJEM47ZtGa") end)
+end)
+local unloadBtn = make(extrasPage, "TextButton", {Size = UDim2.new(0,240,0,34), BackgroundColor3 = Color3.fromRGB(165,65,65), Text = "Unload Script", TextColor3 = Color3.fromRGB(240,240,240)})
 make(unloadBtn, "UICorner", {CornerRadius = UDim.new(0,6)})
 unloadBtn.MouseButton1Click:Connect(function()
-    -- cleanup
-    pcall(function() screenGui:Destroy() end)
-    pcall(function() LocalPlayer:FindFirstChild("PlayerGui"):FindFirstChild("US_FPS"):Destroy() end)
-    print("UniScript unloaded")
+    screenGui:Destroy()
 end)
 
--- Tab button behavior (highlighting)
-local function clearHighlights()
-    for _, btn in pairs({combatBtn, miscBtn, extrasBtn}) do
-        btn.BackgroundColor3 = Color3.fromRGB(28,28,32)
-    end
-end
-
-combatBtn.MouseButton1Click:Connect(function()
-    clearHighlights()
-    combatBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
-    combatPage.Visible = true; miscPage.Visible = false; extrasPage.Visible = false
-end)
-miscBtn.MouseButton1Click:Connect(function()
-    clearHighlights()
-    miscBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
-    combatPage.Visible = false; miscPage.Visible = true; extrasPage.Visible = false
-end)
-extrasBtn.MouseButton1Click:Connect(function()
-    clearHighlights()
-    extrasBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
-    combatPage.Visible = false; miscPage.Visible = false; extrasPage.Visible = true
-end)
-
--- make first tab highlighted
-combatBtn.BackgroundColor3 = Color3.fromRGB(40,40,46)
-
--- make window draggable by titleBar
+-- draggable
 do
-    local dragging, dragInput, dragStart, startPos
-    titleBar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+    local dragging, dragStart, startPos
+    titleBar.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = true
-            dragStart = input.Position
+            dragStart = i.Position
             startPos = window.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
+            i.Changed:Connect(function()
+                if i.UserInputState == Enum.UserInputState.End then dragging = false end
             end)
         end
     end)
-    titleBar.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement then
-            dragInput = input
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            local delta = input.Position - dragStart
-            window.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    UserInputService.InputChanged:Connect(function(i)
+        if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = i.Position - dragStart
+            window.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset+delta.X, startPos.Y.Scale, startPos.Y.Offset+delta.Y)
         end
     end)
 end
 
--- optional FPS label in PlayerGui
-local fpsGui = make(LocalPlayer:WaitForChild("PlayerGui"), "ScreenGui", {Name = "US_FPS", ResetOnSpawn = false})
-local fpsLbl = make(fpsGui, "TextLabel", {Size = UDim2.new(0, 100, 0, 24), Position = UDim2.new(0, 8, 0, 8), BackgroundTransparency = 0.5, BackgroundColor3 = Color3.fromRGB(0,0,0), TextColor3 = Color3.fromRGB(0,255,0), Text = "FPS: --", Font = Enum.Font.SourceSansBold, TextScaled = true})
+-- FPS counter
+local fpsGui = make(LocalPlayer:WaitForChild("PlayerGui"), "ScreenGui", {Name="US_FPS", ResetOnSpawn=false})
+local fpsLbl = make(fpsGui, "TextLabel", {Size=UDim2.new(0,100,0,24), Position=UDim2.new(0,8,0,8), BackgroundTransparency=0.5, BackgroundColor3=Color3.fromRGB(0,0,0), TextColor3=Color3.fromRGB(0,255,0), Text="FPS: --", Font=Enum.Font.SourceSansBold, TextScaled=true})
 local lastTick = tick()
-local fpsConn = RunService.RenderStepped:Connect(function()
+RunService.RenderStepped:Connect(function()
     local now = tick()
-    local fps = 1 / math.max(0.00001, now - lastTick)
+    local fps = 1 / math.max(0.00001, now-lastTick)
     lastTick = now
-    safeCall(function() fpsLbl.Text = "FPS: "..math.floor(fps) end, "FPS update")
+    fpsLbl.Text = "FPS: "..math.floor(fps)
 end)
-
--- expose Settings globally for other scripts if needed
-_G.UniScriptSettings = Settings
-
-print("UniScript BETA UI (Rayfield-style) loaded. Use _G.UniScriptSettings or this UI to control features.")
