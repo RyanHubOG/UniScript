@@ -365,6 +365,7 @@ UIS.InputBegan:Connect(function(input, gp)
         screenGui.Enabled = uiVisible
     end
 end)
+--- adonis bypass
 local g = getinfo or debug.getinfo
 local d = false
 local h = {}
@@ -423,4 +424,4 @@ end))
  
 setthreadidentity(7)
 -- =========================
-print("✅ UniScript BETA: UI + Features Loaded Safely")
+print("UniScript BETA Loaded")
