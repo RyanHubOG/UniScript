@@ -1,15 +1,12 @@
--- =========================
--- UniScript BETA — Full Combined Script
--- Rayfield-style draggable UI + all features wired
--- ========================= fdsxd
+-- UniScript BETA — Rayfield-style draggable UI (offline) with keybind & noclip fix
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-local UIS = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 
--- Settings table
+-- Settings
 local Settings = {
     ESPEnabled = false,
     AimlockEnabled = false,
@@ -23,268 +20,120 @@ local Settings = {
     PlayerFOV = Camera.FieldOfView or 70
 }
 
--- =========================
--- UI Creation (Rayfield-style)
--- =========================
+-- Safe helper
+local function safeCall(fn, name)
+    local ok, err = pcall(fn)
+    if not ok then warn(("UI error [%s]: %s"):format(name or "unknown", tostring(err))) end
+end
+
+-- create helper
 local function make(parent, class, props)
     local obj = Instance.new(class)
-    if props then for k,v in pairs(props) do obj[k] = v end end
+    if props then for k,v in pairs(props) do obj[k] = v end
     obj.Parent = parent
     return obj
 end
 
+-- ScreenGui
 local screenGui = make(LocalPlayer:WaitForChild("PlayerGui"), "ScreenGui", {Name = "UniScriptGUI", ResetOnSpawn = false})
 
--- Main Window
-local window = make(screenGui, "Frame", {Size=UDim2.new(0,580,0,380), Position=UDim2.new(0.06,0,0.12,0), BackgroundColor3=Color3.fromRGB(18,18,20), BorderSizePixel=0})
-make(window,"UICorner",{CornerRadius=UDim.new(0,8)})
+-- Main window
+local window = make(screenGui, "Frame", {
+    Name = "Window",
+    Size = UDim2.new(0, 580, 0, 380),
+    Position = UDim2.new(0.06, 0, 0.12, 0),
+    BackgroundColor3 = Color3.fromRGB(18, 18, 20),
+    BorderSizePixel = 0
+})
+make(window, "UICorner", {CornerRadius = UDim.new(0, 8)})
 
--- Title Bar
-local titleBar = make(window,"Frame",{Size=UDim2.new(1,0,0,44), BackgroundColor3=Color3.fromRGB(12,12,14), BorderSizePixel=0})
-local titleLabel = make(titleBar,"TextLabel",{Size=UDim2.new(1,-120,1,0), Position=UDim2.new(0,20,0,0), BackgroundTransparency=1, Text="UniScript BETA", TextColor3=Color3.fromRGB(230,230,230), Font=Enum.Font.SourceSansBold, TextSize=18, TextXAlignment=Enum.TextXAlignment.Left})
-local subtitle = make(titleBar,"TextLabel",{Size=UDim2.new(0,260,1,0), Position=UDim2.new(1,-260,0,0), BackgroundTransparency=1, Text="By Ryan", TextColor3=Color3.fromRGB(160,160,160), Font=Enum.Font.SourceSans, TextSize=13, TextXAlignment=Enum.TextXAlignment.Right})
+-- Title bar
+local titleBar = make(window, "Frame", {Size=UDim2.new(1,0,0,44), BackgroundColor3=Color3.fromRGB(12,12,14), BorderSizePixel=0})
+make(titleBar, "UIStroke", {Color=Color3.fromRGB(30,30,30), Thickness=1, Transparency=0.4})
+make(titleBar, "UIGradient", {Color=ColorSequence.new(Color3.fromRGB(16,16,18), Color3.fromRGB(12,12,14)), Rotation=90})
+
+-- Title Label updated
+local titleLabel = make(titleBar, "TextLabel", {
+    Size = UDim2.new(1, -20, 1, 0),
+    Position = UDim2.new(0, 10, 0, 0),
+    BackgroundTransparency = 1,
+    Text = "UniScript BETA",
+    TextColor3 = Color3.fromRGB(230,230,230),
+    Font = Enum.Font.SourceSansBold,
+    TextSize = 18,
+    TextXAlignment = Enum.TextXAlignment.Left
+})
 
 -- Sidebar
-local sidebar = make(window,"Frame",{Size=UDim2.new(0,170,1,-44), Position=UDim2.new(0,0,0,44), BackgroundColor3=Color3.fromRGB(24,24,28), BorderSizePixel=0})
-make(sidebar,"UICorner",{CornerRadius=UDim.new(0,6)})
-local sidebarLayout = make(sidebar,"UIListLayout",{Padding=UDim.new(0,8), SortOrder=Enum.SortOrder.LayoutOrder})
+local sidebar = make(window, "Frame", {Size=UDim2.new(0,170,1,-44), Position=UDim2.new(0,0,0,44), BackgroundColor3=Color3.fromRGB(24,24,28), BorderSizePixel=0})
+make(sidebar, "UICorner", {CornerRadius=UDim.new(0,6)})
+local sidebarLayout = make(sidebar, "UIListLayout", {Padding=UDim.new(0,8)})
+sidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
--- Content Pages
-local content = make(window,"Frame",{Size=UDim2.new(1,-180,1,-54), Position=UDim2.new(0,180,0,50), BackgroundTransparency=1})
+-- Content area
+local content = make(window, "Frame", {Size=UDim2.new(1,-180,1,-64), Position=UDim2.new(0,180,0,54), BackgroundTransparency=1})
+
+-- Pages
 local pages = {}
-local function makePage()
-    local p = make(content,"ScrollingFrame",{Size=UDim2.new(1,0,1,0), CanvasSize=UDim2.new(0,0,0,0), BackgroundTransparency=1, Visible=false, ScrollBarThickness=6})
-    local layout = make(p,"UIListLayout",{Padding=UDim.new(0,8)})
-    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        p.CanvasSize = UDim2.new(0,0,0,layout.AbsoluteContentSize.Y+10)
-    end)
-    pages[#pages+1]=p
+local function makePage(name)
+    local p = make(content, "Frame", {Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, Visible=false})
+    pages[name] = p
     return p
 end
-local combatPage = makePage(); combatPage.Visible=true
-local miscPage = makePage()
-local extrasPage = makePage()
+local combatPage = makePage("Combat")
+local miscPage = makePage("Misc")
+local extrasPage = makePage("Extras")
+combatPage.Visible = true
 
--- Tab Buttons
-local function makeTabButton(text,page)
-    local btn = make(sidebar,"TextButton",{Size=UDim2.new(1,-16,0,44), BackgroundColor3=Color3.fromRGB(28,28,32), BorderSizePixel=0, Text=text, TextColor3=Color3.fromRGB(220,220,220), Font=Enum.Font.SourceSansBold, TextSize=15})
-    make(btn,"UICorner",{CornerRadius=UDim.new(0,6)})
-    btn.MouseButton1Click:Connect(function()
-        for _,p in pairs(pages) do p.Visible=false end
-        for _,b in pairs(sidebar:GetChildren()) do if b:IsA("TextButton") then b.BackgroundColor3=Color3.fromRGB(28,28,32) end end
-        btn.BackgroundColor3=Color3.fromRGB(40,40,46)
-        page.Visible=true
-    end)
-    return btn
-end
-makeTabButton("Combat",combatPage).BackgroundColor3=Color3.fromRGB(40,40,46)
-makeTabButton("Misc",miscPage)
-makeTabButton("Extras",extrasPage)
-
--- Toggle
-local function addToggle(parent,text,callback)
-    local btn = make(parent,"TextButton",{Size=UDim2.new(1,-10,0,32), BackgroundColor3=Color3.fromRGB(32,32,36), Text=text.." [OFF]", TextColor3=Color3.fromRGB(220,220,220), Font=Enum.Font.SourceSans, TextSize=15})
-    make(btn,"UICorner",{CornerRadius=UDim.new(0,6)})
-    local state=false
-    btn.MouseButton1Click:Connect(function()
-        state=not state
-        btn.Text=text..(state and " [ON]" or " [OFF]")
-        callback(state)
-    end)
-end
-
--- Slider
-local function addSlider(parent,text,min,max,default,callback)
-    local frame = make(parent,"Frame",{Size=UDim2.new(1,-10,0,50), BackgroundTransparency=1})
-    local label = make(frame,"TextLabel",{Size=UDim2.new(1,0,0,20), BackgroundTransparency=1, Text=text..": "..default, TextColor3=Color3.fromRGB(220,220,220), Font=Enum.Font.SourceSans, TextSize=14})
-    local bar = make(frame,"Frame",{Size=UDim2.new(1,0,0,8), Position=UDim2.new(0,0,0,28), BackgroundColor3=Color3.fromRGB(50,50,55)})
-    make(bar,"UICorner",{CornerRadius=UDim.new(0,4)})
-    local fill = make(bar,"Frame",{Size=UDim2.new((default-min)/(max-min),0,1,0), BackgroundColor3=Color3.fromRGB(100,150,255)})
-    make(fill,"UICorner",{CornerRadius=UDim.new(0,4)})
-    local dragging=false
-    local function update(x)
-        local rel=math.clamp((x-bar.AbsolutePosition.X)/bar.AbsoluteSize.X,0,1)
-        local val=math.floor(min+rel*(max-min))
-        fill.Size=UDim2.new(rel,0,1,0)
-        label.Text=text..": "..val
-        callback(val)
-    end
-    bar.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then dragging=true update(i.Position.X) end end)
-    UIS.InputChanged:Connect(function(i) if dragging and i.UserInputType==Enum.UserInputType.MouseMovement then update(i.Position.X) end end)
-    UIS.InputEnded:Connect(function(i) if dragging and i.UserInputType==Enum.UserInputType.MouseButton1 then dragging=false end end)
-end
-
--- Populate Pages
-addToggle(combatPage,"Aimlock",function(v) Settings.AimlockEnabled=v end)
-addSlider(combatPage,"Aimlock FOV",50,500,Settings.AimlockFOV,function(v) Settings.AimlockFOV=v end)
-addSlider(combatPage,"Prediction",0,100,Settings.AimlockPrediction*100,function(v) Settings.AimlockPrediction=v/100 end)
-addToggle(combatPage,"Wallbang",function(v) Settings.WallbangEnabled=v end)
-addToggle(combatPage,"Melee Aura",function(v) Settings.MeleeAuraEnabled=v end)
-addSlider(combatPage,"Melee Reach",1,30,Settings.MeleeReach,function(v) Settings.MeleeReach=v end)
-
-addToggle(miscPage,"NoClip",function(v) Settings.NoClipEnabled=v end)
-addToggle(miscPage,"Infinite Sprint",function(v) Settings.InfiniteSprint=v end)
-addSlider(miscPage,"Player FOV",70,120,Settings.PlayerFOV,function(v) Settings.PlayerFOV=v Camera.FieldOfView=v end)
-addToggle(miscPage,"ESP",function(v) Settings.ESPEnabled=v end)
-
--- Extras
-local copyBtn = make(extrasPage,"TextButton",{Size=UDim2.new(0,240,0,34), BackgroundColor3=Color3.fromRGB(60,60,70), Text="Copy Discord", TextColor3=Color3.fromRGB(230,230,230)})
-make(copyBtn,"UICorner",{CornerRadius=UDim.new(0,6)})
-copyBtn.MouseButton1Click:Connect(function() pcall(function() setclipboard("https://discord.gg/dJEM47ZtGa") end) end)
-
-local unloadBtn = make(extrasPage,"TextButton",{Size=UDim2.new(0,240,0,34), BackgroundColor3=Color3.fromRGB(165,65,65), Text="Unload Script", TextColor3=Color3.fromRGB(240,240,240)})
-make(unloadBtn,"UICorner",{CornerRadius=UDim.new(0,6)})
-unloadBtn.MouseButton1Click:Connect(function() screenGui:Destroy() end)
-
--- Draggable Window
+-- Draggable window
 do
-    local dragging, dragStart, startPos
-    titleBar.InputBegan:Connect(function(i)
-        if i.UserInputType==Enum.UserInputType.MouseButton1 then
-            dragging=true
-            dragStart=i.Position
-            startPos=window.Position
-            i.Changed:Connect(function() if i.UserInputState==Enum.UserInputState.End then dragging=false end end)
+    local dragging, dragInput, dragStart, startPos
+    titleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = window.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
         end
     end)
-    UIS.InputChanged:Connect(function(i)
-        if dragging and i.UserInputType==Enum.UserInputType.MouseMovement then
-            local delta=i.Position-dragStart
-            window.Position=UDim2.new(startPos.X.Scale,startPos.X.Offset+delta.X,startPos.Y.Scale,startPos.Y.Offset+delta.Y)
+    titleBar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then dragInput = input end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            window.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
 end
 
--- =========================
--- Wiring Features
--- =========================
-local Character, Humanoid, RootPart
-local function getHumanoid()
-    Character=LocalPlayer.Character
-    if Character then
-        Humanoid=Character:FindFirstChildWhichIsA("Humanoid")
-        RootPart=Character:FindFirstChild("HumanoidRootPart")
+-- Keybind to toggle UI (K)
+local uiVisible = true
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.K then
+        uiVisible = not uiVisible
+        safeCall(function() window.Visible = uiVisible end, "UI Toggle")
     end
-end
-LocalPlayer.CharacterAdded:Connect(function() task.wait(1) getHumanoid() end)
-getHumanoid()
+end)
 
--- Infinite Sprint
-task.spawn(function()
-    while task.wait(0.1) do
-        if Settings.InfiniteSprint and Humanoid then
-            for _,tbl in pairs(getgc(true)) do
-                if type(tbl)=="table" and rawget(tbl,"S") then
-                    rawset(tbl,"S",100)
-                end
-            end
+-- Noclip fix
+local function noclipLoop()
+    local char = LocalPlayer.Character
+    if not char then return end
+    for _, part in pairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = not Settings.NoClipEnabled
         end
     end
-end)
-
--- Player FOV updater
-RunService.RenderStepped:Connect(function()
-    if Camera then Camera.FieldOfView=Settings.PlayerFOV end
-end)
-
--- NoClip
+end
 RunService.Stepped:Connect(function()
-    if Settings.NoClipEnabled and Character then
-        for _,part in pairs(Character:GetChildren()) do
-            if part:IsA("BasePart") then part.CanCollide=false end
-        end
-    end
+    if Settings.NoClipEnabled then noclipLoop() end
 end)
 
--- ESP
-local ESPBoxes = {}
-local function createESP(player)
-    if player==LocalPlayer then return end
-    local box=Drawing.new("Square")
-    box.Color=Color3.fromRGB(0,255,0)
-    box.Thickness=2
-    box.Filled=false
-    box.Transparency=1
-    ESPBoxes[player]=box
-end
-local function removeESP(player)
-    if ESPBoxes[player] then ESPBoxes[player]:Remove() ESPBoxes[player]=nil end
-end
-Players.PlayerAdded:Connect(createESP)
-Players.PlayerRemoving:Connect(removeESP)
-for _,p in pairs(Players:GetPlayers()) do createESP(p) end
+-- Expose Settings globally
+_G.UniScriptSettings = Settings
 
-RunService.RenderStepped:Connect(function()
-    for player,box in pairs(ESPBoxes) do
-        if Settings.ESPEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local pos,vis=Camera:WorldToViewportPoint(player.Character.HumanoidRootPart.Position)
-            if vis then
-                box.Visible=true
-                box.Size=Vector2.new(30,60)
-                box.Position=Vector2.new(pos.X-15,pos.Y-30)
-            else
-                box.Visible=false
-            end
-        else
-            box.Visible=false
-        end
-    end
-end)
-
--- Aimlock with FOV circle
-local Circle=Drawing.new("Circle")
-Circle.Radius=Settings.AimlockFOV
-Circle.Color=Color3.fromRGB(255,0,0)
-Circle.Thickness=1
-Circle.Visible=false
-Circle.Filled=false
-
-RunService.RenderStepped:Connect(function()
-    Circle.Position=Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)
-    Circle.Radius=Settings.AimlockFOV
-    Circle.Visible=Settings.AimlockEnabled
-end)
-
-local function getClosestTarget()
-    local closest,dist=nil,math.huge
-    for _,player in pairs(Players:GetPlayers()) do
-        if player~=LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local pos,vis=Camera:WorldToViewportPoint(player.Character.HumanoidRootPart.Position)
-            if vis then
-                local d=(Vector2.new(pos.X,pos.Y)-Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)).Magnitude
-                if d<Circle.Radius and d<dist then
-                    closest,dist=player,d
-                end
-            end
-        end
-    end
-    return closest
-end
-
-RunService.RenderStepped:Connect(function()
-    if Settings.AimlockEnabled then
-        local target=getClosestTarget()
-        if target and target.Character and target.Character:FindFirstChild("Head") then
-            local headPos=target.Character.Head.Position
-            local aimPos=headPos+(target.Character.HumanoidRootPart.Velocity*Settings.AimlockPrediction)
-            Camera.CFrame=CFrame.lookAt(Camera.CFrame.Position,aimPos)
-        end
-    end
-end)
-
--- Melee Aura / Reach
-RunService.RenderStepped:Connect(function()
-    if Settings.MeleeAuraEnabled and Character and RootPart then
-        for _,player in pairs(Players:GetPlayers()) do
-            if player~=LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChildWhichIsA("Humanoid") then
-                local hrp=player.Character.HumanoidRootPart
-                local dist=(hrp.Position-RootPart.Position).Magnitude
-                if dist<=Settings.MeleeReach then
-                    -- player.Character.Humanoid:TakeDamage(10) -- uncomment for actual damage
-                end
-            end
-        end
-    end
-end)
-
-print("✅ UniScript BETA: UI + All Features Loaded")
+print("✅ UniScript BETA UI loaded with keybind (K) & fixed Noclip")
