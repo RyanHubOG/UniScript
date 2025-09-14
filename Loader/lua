@@ -340,6 +340,14 @@ RunService.RenderStepped:Connect(function()
         end
     end
 end)
+-- Toggle UI with K
+local uiVisible = true
+UIS.InputBegan:Connect(function(input, gp)
+    if not gp and input.KeyCode == Enum.KeyCode.K then
+        uiVisible = not uiVisible
+        screenGui.Enabled = uiVisible
+    end
+end)
 
 -- =========================
 print("✅ UniScript BETA: UI + Features Loaded Safely")
