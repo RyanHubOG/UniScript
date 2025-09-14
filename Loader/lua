@@ -8,7 +8,6 @@ local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 
-
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 -- =========================
@@ -24,7 +23,8 @@ local Settings = {
     MeleeReach = 10,
     NoClipEnabled = false,
     InfiniteSprint = false,
-    PlayerFOV = Camera.FieldOfView or 70
+    PlayerFOV = Camera.FieldOfView or 70,
+    NoFailLockpick = false -- Auto Lockpick
 }
 
 local showFOV = false 
@@ -136,7 +136,9 @@ local function addSlider(parent,text,min,max,default,callback)
     UIS.InputEnded:Connect(function(i) if dragging and i.UserInputType==Enum.UserInputType.MouseButton1 then dragging=false end end)
 end
 
+-- =========================
 -- Populate UI
+-- =========================
 addToggle(combatPage,"Aimlock",function(v) Settings.AimlockEnabled=v end)
 addToggle(combatPage,"Show Aimlock FOV",function(v) showFOV=v if AimlockCircle then AimlockCircle.Visible = Settings.AimlockEnabled and showFOV end end)
 addSlider(combatPage,"Aimlock FOV",50,500,Settings.AimlockFOV,function(v) Settings.AimlockFOV=v end)
@@ -149,6 +151,7 @@ addToggle(miscPage,"NoClip",function(v) Settings.NoClipEnabled=v end)
 addToggle(miscPage,"Infinite Sprint",function(v) Settings.InfiniteSprint=v end)
 addSlider(miscPage,"Player FOV",70,120,Settings.PlayerFOV,function(v) Settings.PlayerFOV=v Camera.FieldOfView=v end)
 addToggle(miscPage,"ESP",function(v) Settings.ESPEnabled=v end)
+addToggle(miscPage,"Auto Lockpick",function(v) Settings.NoFailLockpick=v end) -- Added toggle
 
 -- Extras buttons
 local copyBtn = make(extrasPage,"TextButton",{Size=UDim2.new(0,240,0,34), BackgroundColor3=Color3.fromRGB(60,60,70), Text="Copy Discord", TextColor3=Color3.fromRGB(230,230,230)})
@@ -158,25 +161,6 @@ copyBtn.MouseButton1Click:Connect(function() pcall(function() setclipboard("http
 local unloadBtn = make(extrasPage,"TextButton",{Size=UDim2.new(0,240,0,34), BackgroundColor3=Color3.fromRGB(165,65,65), Text="Unload Script", TextColor3=Color3.fromRGB(240,240,240)})
 make(unloadBtn,"UICorner",{CornerRadius=UDim.new(0,6)})
 unloadBtn.MouseButton1Click:Connect(function() screenGui:Destroy() end)
-
--- Draggable Window
-do
-    local dragging, dragStart, startPos
-    titleBar.InputBegan:Connect(function(i)
-        if i.UserInputType==Enum.UserInputType.MouseButton1 then
-            dragging=true
-            dragStart=i.Position
-            startPos=window.Position
-            i.Changed:Connect(function() if i.UserInputState==Enum.UserInputState.End then dragging=false end end)
-        end
-    end)
-    UIS.InputChanged:Connect(function(i)
-        if dragging and i.UserInputType==Enum.UserInputType.MouseMovement then
-            local delta=i.Position-dragStart
-            window.Position=UDim2.new(startPos.X.Scale,startPos.X.Offset+delta.X,startPos.Y.Scale,startPos.Y.Offset+delta.Y)
-        end
-    end)
-end
 
 -- =========================
 -- Features Wiring
@@ -258,7 +242,6 @@ local NoclipParts = {}
 
 RunService.Stepped:Connect(function()
     if Settings.NoClipEnabled and Character then
-        -- Disable collisions on all BaseParts
         for _, part in pairs(Character:GetDescendants()) do
             if part:IsA("BasePart") then
                 if part.CanCollide then
@@ -268,7 +251,6 @@ RunService.Stepped:Connect(function()
             end
         end
     elseif not Settings.NoClipEnabled then
-        -- Restore previous CanCollide state
         for part,_ in pairs(NoclipParts) do
             if part and part.Parent then
                 part.CanCollide = true
@@ -278,7 +260,6 @@ RunService.Stepped:Connect(function()
     end
 end)
 
-
 -- ESP (Boxes + Names + Distance)
 local ESPBoxes = {}
 local ESPNames = {}
@@ -286,7 +267,6 @@ local ESPDistances = {}
 
 local function createESP(player)
     if player == LocalPlayer then return end
-
     local box = Drawing.new("Square")
     box.Color = Color3.fromRGB(0,255,0)
     box.Thickness = 2
@@ -357,6 +337,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
 end)
+
 -- Toggle UI with K
 local uiVisible = true
 UIS.InputBegan:Connect(function(input, gp)
@@ -365,36 +346,53 @@ UIS.InputBegan:Connect(function(input, gp)
         screenGui.Enabled = uiVisible
     end
 end)
---- adonis bypass
+
+-- =========================
+-- Auto Lockpick
+-- =========================
+game.Players.LocalPlayer.PlayerGui.ChildAdded:Connect(function(Item)
+    if Item.Name == "LockpickGUI" then
+        local frame = Item.MF["LP_Frame"].Frames
+        if Settings.NoFailLockpick then
+            frame.B1.Bar.UIScale.Scale = 10
+            frame.B2.Bar.UIScale.Scale = 10
+            frame.B3.Bar.UIScale.Scale = 10
+        else
+            frame.B1.Bar.UIScale.Scale = 1
+            frame.B2.Bar.UIScale.Scale = 1
+            frame.B3.Bar.UIScale.Scale = 1
+        end
+    end
+end)
+
+-- =========================
+-- Adonis bypass
+-- =========================
 local g = getinfo or debug.getinfo
 local d = false
 local h = {}
- 
 local x, y
- 
+
 setthreadidentity(2)
- 
+
 for i, v in getgc(true) do
     if typeof(v) == "table" then
         local a = rawget(v, "Detected")
         local b = rawget(v, "Kill")
- 
+
         if typeof(a) == "function" and not x then
             x = a
- 
             local o; o = hookfunction(x, function(c, f, n)
                 if c ~= "_" then
                     if d then
                         warn(`Adonis AntiCheat flagged\nMethod: {c}\nInfo: {f}`)
                     end
                 end
- 
                 return true
             end)
- 
             table.insert(h, x)
         end
- 
+
         if rawget(v, "Variables") and rawget(v, "Process") and typeof(b) == "function" and not y then
             y = b
             local o; o = hookfunction(y, function(f)
@@ -402,26 +400,22 @@ for i, v in getgc(true) do
                     warn(`Adonis AntiCheat tried to kill (fallback): {f}`)
                 end
             end)
- 
             table.insert(h, y)
         end
     end
 end
- 
+
 local o; o = hookfunction(getrenv().debug.info, newcclosure(function(...)
     local a, f = ...
- 
     if x and a == x then
         if d then
             warn(`zins | adonis bypassed`)
         end
- 
         return coroutine.yield(coroutine.running())
     end
- 
     return o(...)
 end))
- 
 setthreadidentity(7)
+
 -- =========================
 print("UniScript BETA Loaded")
