@@ -1,0 +1,197 @@
+-- ===========
+-- UniScript 
+-- ==========
+
+-- // Services
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- // Settings
+local Settings = {
+    ESPEnabled = false,
+    AimlockEnabled = false,
+    AimlockFOV = 150,
+    AimlockPrediction = 0.18,
+    WallbangEnabled = false,
+    MeleeAuraEnabled = false,
+    MeleeReach = 10,
+    NoClipEnabled = false,
+    InfiniteSprint = false,
+    PlayerFOV = Camera.FieldOfView or 70,
+    NoFailLockpick = false,
+    InfiniteStaminaEnabled = false,
+    SilentAimEnabled = false,
+    AntiCheatBypassEnabled = true,
+    NoRecoil = false,
+    NoSpread = false,
+    InstantFire = false,
+    GlobalRecoilValue = nil,
+    SafeESPEnabled = true,
+    ScrapESPEnabled = true,
+    ChatVisible = true
+}
+
+local showFOV = false 
+local aiming = false
+
+-- // Drawing Check
+local DrawingAvailable = pcall(function() return Drawing.new("Circle") end)
+local AimlockCircle
+if DrawingAvailable then
+    AimlockCircle = Drawing.new("Circle")
+    AimlockCircle.Radius = Settings.AimlockFOV
+    AimlockCircle.Color = Color3.fromRGB(255,0,0)
+    AimlockCircle.Thickness = 1
+    AimlockCircle.Visible = false
+    AimlockCircle.Filled = false
+end
+
+-- // UI Helpers
+local function make(parent, class, props)
+    local obj = Instance.new(class)
+    if props then for k,v in pairs(props) do obj[k] = v end end
+    obj.Parent = parent
+    return obj
+end
+
+local screenGui = make(PlayerGui, "ScreenGui", {Name="UniScriptGUI", ResetOnSpawn=false})
+
+-- Main window
+local window = make(screenGui,"Frame",{Size=UDim2.new(0,580,0,380), Position=UDim2.new(0.06,0,0.12,0), BackgroundColor3=Color3.fromRGB(18,18,20), BorderSizePixel=0})
+make(window,"UICorner",{CornerRadius=UDim.new(0,8)})
+
+-- Title bar
+local titleBar = make(window,"Frame",{Size=UDim2.new(1,0,0,44), BackgroundColor3=Color3.fromRGB(12,12,14), BorderSizePixel=0})
+make(titleBar,"TextLabel",{Size=UDim2.new(1,-120,1,0), Position=UDim2.new(0,20,0,0), BackgroundTransparency=1, Text="UniScript BETA", TextColor3=Color3.fromRGB(230,230,230), Font=Enum.Font.SourceSansBold, TextSize=18, TextXAlignment=Enum.TextXAlignment.Left})
+make(titleBar,"TextLabel",{Size=UDim2.new(0,260,1,0), Position=UDim2.new(1,-260,0,0), BackgroundTransparency=1, Text="By Ryan", TextColor3=Color3.fromRGB(160,160,160), Font=Enum.Font.SourceSans, TextSize=13, TextXAlignment=Enum.TextXAlignment.Right})
+
+-- Sidebar
+local sidebar = make(window,"Frame",{Size=UDim2.new(0,170,1,-44), Position=UDim2.new(0,0,0,44), BackgroundColor3=Color3.fromRGB(24,24,28), BorderSizePixel=0})
+make(sidebar,"UICorner",{CornerRadius=UDim.new(0,6)})
+make(sidebar,"UIListLayout",{Padding=UDim.new(0,8), SortOrder=Enum.SortOrder.LayoutOrder})
+
+-- Content pages
+local content = make(window,"Frame",{Size=UDim2.new(1,-180,1,-54), Position=UDim2.new(0,180,0,50), BackgroundTransparency=1})
+local pages = {}
+local function makePage()
+    local p = make(content,"ScrollingFrame",{Size=UDim2.new(1,0,1,0), CanvasSize=UDim2.new(0,0,0,0), BackgroundTransparency=1, Visible=false, ScrollBarThickness=6})
+    local layout = make(p,"UIListLayout",{Padding=UDim.new(0,8)})
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        p.CanvasSize = UDim2.new(0,0,0,layout.AbsoluteContentSize.Y+10)
+    end)
+    pages[#pages+1]=p
+    return p
+end
+
+local combatPage = makePage(); combatPage.Visible=true
+local miscPage = makePage()
+local extrasPage = makePage()
+
+-- Tab buttons
+local function makeTabButton(text,page)
+    local btn = make(sidebar,"TextButton",{Size=UDim2.new(1,-16,0,44), BackgroundColor3=Color3.fromRGB(28,28,32), BorderSizePixel=0, Text=text, TextColor3=Color3.fromRGB(220,220,220), Font=Enum.Font.SourceSansBold, TextSize=15})
+    make(btn,"UICorner",{CornerRadius=UDim.new(0,6)})
+    btn.MouseButton1Click:Connect(function()
+        for _,p in pairs(pages) do p.Visible=false end
+        for _,b in pairs(sidebar:GetChildren()) do if b:IsA("TextButton") then b.BackgroundColor3=Color3.fromRGB(28,28,32) end end
+        btn.BackgroundColor3=Color3.fromRGB(40,40,46)
+        page.Visible=true
+    end)
+    return btn
+end
+
+makeTabButton("Combat",combatPage).BackgroundColor3=Color3.fromRGB(40,40,46)
+makeTabButton("Misc",miscPage)
+makeTabButton("Extras",extrasPage)
+
+-- Toggle helper
+local function addToggle(parent,text,callback)
+    local btn = make(parent,"TextButton",{Size=UDim2.new(1,-10,0,32), BackgroundColor3=Color3.fromRGB(32,32,36), Text=text.." [OFF]", TextColor3=Color3.fromRGB(220,220,220), Font=Enum.Font.SourceSans, TextSize=15})
+    make(btn,"UICorner",{CornerRadius=UDim.new(0,6)})
+    local state=false
+    btn.MouseButton1Click:Connect(function()
+        state=not state
+        btn.Text=text..(state and " [ON]" or " [OFF]")
+        callback(state)
+    end)
+end
+
+-- Slider helper
+local function addSlider(parent,text,min,max,default,callback)
+    local frame = make(parent,"Frame",{Size=UDim2.new(1,-10,0,50), BackgroundTransparency=1})
+    local label = make(frame,"TextLabel",{Size=UDim2.new(1,0,0,20), BackgroundTransparency=1, Text=text..": "..default, TextColor3=Color3.fromRGB(220,220,220), Font=Enum.Font.SourceSans, TextSize=14})
+    local bar = make(frame,"Frame",{Size=UDim2.new(1,0,0,8), Position=UDim2.new(0,0,0,28), BackgroundColor3=Color3.fromRGB(50,50,55)})
+    make(bar,"UICorner",{CornerRadius=UDim.new(0,4)})
+    local fill = make(bar,"Frame",{Size=UDim2.new((default-min)/(max-min),0,1,0), BackgroundColor3=Color3.fromRGB(100,150,255)})
+    make(fill,"UICorner",{CornerRadius=UDim.new(0,4)})
+    local dragging=false
+    local function update(x)
+        local rel=math.clamp((x-bar.AbsolutePosition.X)/bar.AbsoluteSize.X,0,1)
+        local val=math.floor(min+rel*(max-min))
+        fill.Size=UDim2.new(rel,0,1,0)
+        label.Text=text..": "..val
+        callback(val)
+    end
+    bar.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then dragging=true update(i.Position.X) end end)
+    UIS.InputChanged:Connect(function(i) if dragging and i.UserInputType==Enum.UserInputType.MouseMovement then update(i.Position.X) end end)
+    UIS.InputEnded:Connect(function(i) if dragging and i.UserInputType==Enum.UserInputType.MouseButton1 then dragging=false end end)
+end
+
+-- =========================
+-- Populate Misc tab
+-- =========================
+-- NoClip
+addToggle(miscPage,"NoClip",function(v) Settings.NoClipEnabled=v end)
+-- Infinite Sprint
+addToggle(miscPage,"Infinite Sprint",function(v) Settings.InfiniteSprint=v end)
+-- Player FOV
+addSlider(miscPage,"Player FOV",70,120,Settings.PlayerFOV,function(v) Settings.PlayerFOV=v Camera.FieldOfView=v end)
+-- ESP (Players)
+addToggle(miscPage,"ESP (Players)",function(v) Settings.ESPEnabled=v end)
+-- Auto Lockpick
+addToggle(miscPage,"Auto Lockpick",function(v) Settings.NoFailLockpick=v end)
+-- Chat Toggle
+addToggle(miscPage,"Show Chat", function(state)
+    Settings.ChatVisible = state
+    local ChatFrame = Players.LocalPlayer.PlayerGui:WaitForChild("Chat"):WaitForChild("Frame")
+    if ChatFrame then
+        ChatFrame.ChatChannelParentFrame.Visible = state
+        ChatFrame.ChatBarParentFrame.Position = state and UDim2.new(0, 0, 1, -42) or UDim2.new(0,0,1,0)
+    end
+end)
+
+-- Safe ESP
+local Manager, Base = loadstring(game:HttpGet("https://raw.githubusercontent.com/Stefanuk12/ROBLOX/master/Universal/ESP/Manager.lua"))()
+Base.Tracers.GlobalEnabled = false
+local SafesFolder = workspace:WaitForChild("Map"):WaitForChild("BredMakurz")
+local SafeESP = Manager.new(SafesFolder, {
+    Filter = function(self, child)
+        return child.Name:find("Safe")
+    end
+})
+SafeESP:Start()
+addToggle(miscPage, "Safe ESP", function(state)
+    Settings.SafeESPEnabled = state
+    if SafeESP then
+        SafeESP.Enabled = state
+    end
+end)
+
+-- Scrap ESP
+local ScrapFolder = workspace:WaitForChild("Filter"):WaitForChild("SpawnedPiles")
+local ScrapESP = Manager.new(ScrapFolder)
+ScrapESP:Start()
+addToggle(miscPage, "Scrap ESP", function(state)
+    Settings.ScrapESPEnabled = state
+    if ScrapESP then
+        ScrapESP.Enabled = state
+    end
+end)
+
+-- =========================
+-- Done
+print("UniScript FULL LOADED")
