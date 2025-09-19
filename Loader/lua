@@ -1,5 +1,5 @@
---- =========================
--- UniScript BETA  v1.
+-- =========================
+-- UniScript BETA 
 -- =========================
 
 local Players = game:GetService("Players")
@@ -24,11 +24,10 @@ local Settings = {
     NoClipEnabled = false,
     InfiniteSprint = false,
     PlayerFOV = Camera.FieldOfView or 70,
-    NoFailLockpick = false,
-    InstantInteractEnabled = false -- New feature
+    NoFailLockpick = false -- Auto Lockpick
 }
 
-local showFOV = false
+local showFOV = false 
 local aiming = false
 
 -- =========================
@@ -48,7 +47,7 @@ else
 end
 
 -- =========================
--- UI Helpers
+-- Create UI
 -- =========================
 local function make(parent, class, props)
     local obj = Instance.new(class)
@@ -57,6 +56,55 @@ local function make(parent, class, props)
     return obj
 end
 
+local screenGui = make(PlayerGui, "ScreenGui", {Name="UniScriptGUI", ResetOnSpawn=false})
+
+-- Main Window
+local window = make(screenGui,"Frame",{Size=UDim2.new(0,580,0,380), Position=UDim2.new(0.06,0,0.12,0), BackgroundColor3=Color3.fromRGB(18,18,20), BorderSizePixel=0})
+make(window,"UICorner",{CornerRadius=UDim.new(0,8)})
+
+-- Title Bar
+local titleBar = make(window,"Frame",{Size=UDim2.new(1,0,0,44), BackgroundColor3=Color3.fromRGB(12,12,14), BorderSizePixel=0})
+make(titleBar,"TextLabel",{Size=UDim2.new(1,-120,1,0), Position=UDim2.new(0,20,0,0), BackgroundTransparency=1, Text="UniScript BETA", TextColor3=Color3.fromRGB(230,230,230), Font=Enum.Font.SourceSansBold, TextSize=18, TextXAlignment=Enum.TextXAlignment.Left})
+make(titleBar,"TextLabel",{Size=UDim2.new(0,260,1,0), Position=UDim2.new(1,-260,0,0), BackgroundTransparency=1, Text="By Ryan", TextColor3=Color3.fromRGB(160,160,160), Font=Enum.Font.SourceSans, TextSize=13, TextXAlignment=Enum.TextXAlignment.Right})
+
+-- Sidebar
+local sidebar = make(window,"Frame",{Size=UDim2.new(0,170,1,-44), Position=UDim2.new(0,0,0,44), BackgroundColor3=Color3.fromRGB(24,24,28), BorderSizePixel=0})
+make(sidebar,"UICorner",{CornerRadius=UDim.new(0,6)})
+make(sidebar,"UIListLayout",{Padding=UDim.new(0,8), SortOrder=Enum.SortOrder.LayoutOrder})
+
+-- Content Pages
+local content = make(window,"Frame",{Size=UDim2.new(1,-180,1,-54), Position=UDim2.new(0,180,0,50), BackgroundTransparency=1})
+local pages = {}
+local function makePage()
+    local p = make(content,"ScrollingFrame",{Size=UDim2.new(1,0,1,0), CanvasSize=UDim2.new(0,0,0,0), BackgroundTransparency=1, Visible=false, ScrollBarThickness=6})
+    local layout = make(p,"UIListLayout",{Padding=UDim.new(0,8)})
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        p.CanvasSize = UDim2.new(0,0,0,layout.AbsoluteContentSize.Y+10)
+    end)
+    pages[#pages+1]=p
+    return p
+end
+local combatPage = makePage(); combatPage.Visible=true
+local miscPage = makePage()
+local extrasPage = makePage()
+
+-- Tab Buttons
+local function makeTabButton(text,page)
+    local btn = make(sidebar,"TextButton",{Size=UDim2.new(1,-16,0,44), BackgroundColor3=Color3.fromRGB(28,28,32), BorderSizePixel=0, Text=text, TextColor3=Color3.fromRGB(220,220,220), Font=Enum.Font.SourceSansBold, TextSize=15})
+    make(btn,"UICorner",{CornerRadius=UDim.new(0,6)})
+    btn.MouseButton1Click:Connect(function()
+        for _,p in pairs(pages) do p.Visible=false end
+        for _,b in pairs(sidebar:GetChildren()) do if b:IsA("TextButton") then b.BackgroundColor3=Color3.fromRGB(28,28,32) end end
+        btn.BackgroundColor3=Color3.fromRGB(40,40,46)
+        page.Visible=true
+    end)
+    return btn
+end
+makeTabButton("Combat",combatPage).BackgroundColor3=Color3.fromRGB(40,40,46)
+makeTabButton("Misc",miscPage)
+makeTabButton("Extras",extrasPage)
+
+-- UI Helpers
 local function addToggle(parent,text,callback)
     local btn = make(parent,"TextButton",{Size=UDim2.new(1,-10,0,32), BackgroundColor3=Color3.fromRGB(32,32,36), Text=text.." [OFF]", TextColor3=Color3.fromRGB(220,220,220), Font=Enum.Font.SourceSans, TextSize=15})
     make(btn,"UICorner",{CornerRadius=UDim.new(0,6)})
@@ -89,62 +137,8 @@ local function addSlider(parent,text,min,max,default,callback)
 end
 
 -- =========================
--- Create UI
--- =========================
-local screenGui = make(PlayerGui, "ScreenGui", {Name="UniScriptGUI", ResetOnSpawn=false})
-
--- Main Window
-local window = make(screenGui,"Frame",{Size=UDim2.new(0,580,0,380), Position=UDim2.new(0.06,0,0.12,0), BackgroundColor3=Color3.fromRGB(18,18,20), BorderSizePixel=0})
-make(window,"UICorner",{CornerRadius=UDim.new(0,8)})
-
--- Title Bar
-local titleBar = make(window,"Frame",{Size=UDim2.new(1,0,0,44), BackgroundColor3=Color3.fromRGB(12,12,14), BorderSizePixel=0})
-make(titleBar,"TextLabel",{Size=UDim2.new(1,-120,1,0), Position=UDim2.new(0,20,0,0), BackgroundTransparency=1, Text="UniScript BETA", TextColor3=Color3.fromRGB(230,230,230), Font=Enum.Font.SourceSansBold, TextSize=18, TextXAlignment=Enum.TextXAlignment.Left})
-make(titleBar,"TextLabel",{Size=UDim2.new(0,260,1,0), Position=UDim2.new(1,-260,0,0), BackgroundTransparency=1, Text="By Ryan", TextColor3=Color3.fromRGB(160,160,160), Font=Enum.Font.SourceSans, TextSize=13, TextXAlignment=Enum.TextXAlignment.Right})
-
--- Sidebar
-local sidebar = make(window,"Frame",{Size=UDim2.new(0,170,1,-44), Position=UDim2.new(0,0,0,44), BackgroundColor3=Color3.fromRGB(24,24,28), BorderSizePixel=0})
-make(sidebar,"UICorner",{CornerRadius=UDim.new(0,6)})
-make(sidebar,"UIListLayout",{Padding=UDim.new(0,8), SortOrder=Enum.SortOrder.LayoutOrder})
-
--- Content Pages
-local content = make(window,"Frame",{Size=UDim2.new(1,-180,1,-54), Position=UDim2.new(0,180,0,50), BackgroundTransparency=1})
-local pages = {}
-local function makePage()
-    local p = make(content,"ScrollingFrame",{Size=UDim2.new(1,0,1,0), CanvasSize=UDim2.new(0,0,0,0), BackgroundTransparency=1, Visible=false, ScrollBarThickness=6})
-    local layout = make(p,"UIListLayout",{Padding=UDim.new(0,8)})
-    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        p.CanvasSize = UDim2.new(0,0,0,layout.AbsoluteContentSize.Y+10)
-    end)
-    pages[#pages+1]=p
-    return p
-end
-
-local combatPage = makePage(); combatPage.Visible=true
-local miscPage = makePage()
-local extrasPage = makePage()
-
--- Tab Buttons
-local function makeTabButton(text,page)
-    local btn = make(sidebar,"TextButton",{Size=UDim2.new(1,-16,0,44), BackgroundColor3=Color3.fromRGB(28,28,32), BorderSizePixel=0, Text=text, TextColor3=Color3.fromRGB(220,220,220), Font=Enum.Font.SourceSansBold, TextSize=15})
-    make(btn,"UICorner",{CornerRadius=UDim.new(0,6)})
-    btn.MouseButton1Click:Connect(function()
-        for _,p in pairs(pages) do p.Visible=false end
-        for _,b in pairs(sidebar:GetChildren()) do if b:IsA("TextButton") then b.BackgroundColor3=Color3.fromRGB(28,28,32) end end
-        btn.BackgroundColor3=Color3.fromRGB(40,40,46)
-        page.Visible=true
-    end)
-    return btn
-end
-
-makeTabButton("Combat",combatPage).BackgroundColor3=Color3.fromRGB(40,40,46)
-makeTabButton("Misc",miscPage)
-makeTabButton("Extras",extrasPage)
-
--- =========================
 -- Populate UI
 -- =========================
--- Combat Toggles
 addToggle(combatPage,"Aimlock",function(v) Settings.AimlockEnabled=v end)
 addToggle(combatPage,"Show Aimlock FOV",function(v) showFOV=v if AimlockCircle then AimlockCircle.Visible = Settings.AimlockEnabled and showFOV end end)
 addSlider(combatPage,"Aimlock FOV",50,500,Settings.AimlockFOV,function(v) Settings.AimlockFOV=v end)
@@ -153,15 +147,13 @@ addToggle(combatPage,"Wallbang",function(v) Settings.WallbangEnabled=v end)
 addToggle(combatPage,"Melee Aura",function(v) Settings.MeleeAuraEnabled=v end)
 addSlider(combatPage,"Melee Reach",1,30,Settings.MeleeReach,function(v) Settings.MeleeReach=v end)
 
--- Misc Toggles
 addToggle(miscPage,"NoClip",function(v) Settings.NoClipEnabled=v end)
 addToggle(miscPage,"Infinite Sprint",function(v) Settings.InfiniteSprint=v end)
 addSlider(miscPage,"Player FOV",70,120,Settings.PlayerFOV,function(v) Settings.PlayerFOV=v Camera.FieldOfView=v end)
 addToggle(miscPage,"ESP",function(v) Settings.ESPEnabled=v end)
-addToggle(miscPage,"Auto Lockpick",function(v) Settings.NoFailLockpick=v end)
-addToggle(miscPage,"Instant Interact",function(v) Settings.InstantInteractEnabled=v end) -- NEW
+addToggle(miscPage,"Auto Lockpick",function(v) Settings.NoFailLockpick=v end) -- Added toggle
 
--- Extras Buttons
+-- Extras buttons
 local copyBtn = make(extrasPage,"TextButton",{Size=UDim2.new(0,240,0,34), BackgroundColor3=Color3.fromRGB(60,60,70), Text="Copy Discord", TextColor3=Color3.fromRGB(230,230,230)})
 make(copyBtn,"UICorner",{CornerRadius=UDim.new(0,6)})
 copyBtn.MouseButton1Click:Connect(function() pcall(function() setclipboard("https://discord.gg/dJEM47ZtGa") end) end)
@@ -171,73 +163,259 @@ make(unloadBtn,"UICorner",{CornerRadius=UDim.new(0,6)})
 unloadBtn.MouseButton1Click:Connect(function() screenGui:Destroy() end)
 
 -- =========================
--- UI Dragging (safe, clicks on buttons still work)
+-- Features Wiring
 -- =========================
-local dragging, dragInput, dragStart, startPos
-window.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        if input.Target == window then
-            dragging = true
-            dragStart = input.Position
-            startPos = window.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
+local Character, Humanoid, RootPart
+local function getHumanoid()
+    Character=LocalPlayer.Character
+    if Character then
+        Humanoid=Character:FindFirstChildWhichIsA("Humanoid")
+        RootPart=Character:FindFirstChild("HumanoidRootPart")
+    end
+end
+LocalPlayer.CharacterAdded:Connect(function() task.wait(1) getHumanoid() end)
+getHumanoid()
+
+-- Infinite Sprint
+task.spawn(function()
+    while task.wait(0.1) do
+        if Settings.InfiniteSprint and Humanoid then
+            for _,tbl in pairs(getgc(true)) do
+                if type(tbl)=="table" and rawget(tbl,"S") then
+                    rawset(tbl,"S",100)
                 end
-            end)
+            end
         end
     end
 end)
 
-window.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement then
-        dragInput = input
+-- Player FOV updater & Aimlock
+UIS.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        aiming = true
+    end
+end)
+UIS.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        aiming = false
     end
 end)
 
-UIS.InputChanged:Connect(function(input)
-    if input == dragInput and dragging then
-        local delta = input.Position - dragStart
-        window.Position = UDim2.new(
-            startPos.X.Scale, startPos.X.Offset + delta.X,
-            startPos.Y.Scale, startPos.Y.Offset + delta.Y
-        )
-    end
-end)
-
--- =========================
--- Features Wiring (Aimlock, ESP, NoClip, etc.)
--- Keep your original loops for Aimlock, ESP, Melee Aura, Infinite Sprint, NoClip
--- ...
-
--- =========================
--- Instant Interact Loop
--- Wait for character first
-local function setupPrompt(prompt)
-    if prompt:IsA("ProximityPrompt") then
-        prompt.HoldDuration = 0
-        prompt:GetPropertyChangedSignal("Enabled"):Connect(function()
-            if prompt.Enabled and Settings.InstantInteractEnabled then
-                prompt.HoldDuration = 0
+local function getClosestTarget()
+    local closest = nil
+    local dist = math.huge
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local screenPos, onScreen = Camera:WorldToViewportPoint(player.Character.HumanoidRootPart.Position)
+            if onScreen then
+                local magnitude = (Vector2.new(screenPos.X,screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)).Magnitude
+                if magnitude < dist and magnitude <= Settings.AimlockFOV then
+                    closest = player
+                    dist = magnitude
+                end
             end
-        end)
+        end
+    end
+    return closest
+end
+
+RunService.RenderStepped:Connect(function()
+    if Camera then Camera.FieldOfView = Settings.PlayerFOV end
+    if DrawingAvailable and AimlockCircle then
+        AimlockCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+        AimlockCircle.Radius = Settings.AimlockFOV
+        AimlockCircle.Visible = Settings.AimlockEnabled and showFOV
+    end
+
+    if aiming and Settings.AimlockEnabled then
+        local target = getClosestTarget()
+        if target and target.Character and target.Character:FindFirstChild("Head") then
+            local headPos = target.Character.Head.Position
+            local predictedPos = headPos + (target.Character.HumanoidRootPart.Velocity * Settings.AimlockPrediction)
+            Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, predictedPos)
+        end
+    end
+end)
+
+-- NoClip
+local NoclipParts = {}
+
+RunService.Stepped:Connect(function()
+    if Settings.NoClipEnabled and Character then
+        for _, part in pairs(Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                if part.CanCollide then
+                    NoclipParts[part] = true
+                    part.CanCollide = false
+                end
+            end
+        end
+    elseif not Settings.NoClipEnabled then
+        for part,_ in pairs(NoclipParts) do
+            if part and part.Parent then
+                part.CanCollide = true
+            end
+        end
+        NoclipParts = {}
+    end
+end)
+
+-- ESP (Boxes + Names + Distance)
+local ESPBoxes = {}
+local ESPNames = {}
+local ESPDistances = {}
+
+local function createESP(player)
+    if player == LocalPlayer then return end
+    local box = Drawing.new("Square")
+    box.Color = Color3.fromRGB(0,255,0)
+    box.Thickness = 2
+    box.Filled = false
+    box.Transparency = 1
+    ESPBoxes[player] = box
+
+    local nameText = Drawing.new("Text")
+    nameText.Color = Color3.fromRGB(255,255,255)
+    nameText.Size = 14
+    nameText.Center = true
+    nameText.Outline = true
+    ESPNames[player] = nameText
+
+    local distText = Drawing.new("Text")
+    distText.Color = Color3.fromRGB(255,255,255)
+    distText.Size = 14
+    distText.Center = true
+    distText.Outline = true
+    ESPDistances[player] = distText
+end
+
+local function removeESP(player)
+    if ESPBoxes[player] then ESPBoxes[player]:Remove() ESPBoxes[player]=nil end
+    if ESPNames[player] then ESPNames[player]:Remove() ESPNames[player]=nil end
+    if ESPDistances[player] then ESPDistances[player]:Remove() ESPDistances[player]=nil end
+end
+
+Players.PlayerAdded:Connect(createESP)
+Players.PlayerRemoving:Connect(removeESP)
+for _,p in pairs(Players:GetPlayers()) do createESP(p) end
+
+RunService.RenderStepped:Connect(function()
+    for player,box in pairs(ESPBoxes) do
+        if Settings.ESPEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local root = player.Character.HumanoidRootPart
+            local head = player.Character:FindFirstChild("Head")
+            local pos, vis = Camera:WorldToViewportPoint(root.Position)
+            if vis then
+                box.Visible = true
+                box.Size = Vector2.new(30, 60)
+                box.Position = Vector2.new(pos.X-15, pos.Y-30)
+
+                if head then
+                    local headPos, headVis = Camera:WorldToViewportPoint(head.Position + Vector3.new(0,0.5,0))
+                    if headVis then
+                        ESPNames[player].Visible = true
+                        ESPNames[player].Position = Vector2.new(headPos.X, headPos.Y-10)
+                        ESPNames[player].Text = player.Name
+                        ESPDistances[player].Visible = true
+                        local distance = math.floor((root.Position - workspace.CurrentCamera.CFrame.Position).Magnitude)
+                        ESPDistances[player].Position = Vector2.new(headPos.X, headPos.Y+10)
+                        ESPDistances[player].Text = distance.." studs"
+                    else
+                        ESPNames[player].Visible = false
+                        ESPDistances[player].Visible = false
+                    end
+                end
+            else
+                box.Visible = false
+                ESPNames[player].Visible = false
+                ESPDistances[player].Visible = false
+            end
+        else
+            box.Visible = false
+            ESPNames[player].Visible = false
+            ESPDistances[player].Visible = false
+        end
+    end
+end)
+
+-- Toggle UI with K
+local uiVisible = true
+UIS.InputBegan:Connect(function(input, gp)
+    if not gp and input.KeyCode == Enum.KeyCode.K then
+        uiVisible = not uiVisible
+        screenGui.Enabled = uiVisible
+    end
+end)
+
+-- =========================
+-- Auto Lockpick
+-- =========================
+game.Players.LocalPlayer.PlayerGui.ChildAdded:Connect(function(Item)
+    if Item.Name == "LockpickGUI" then
+        local frame = Item.MF["LP_Frame"].Frames
+        if Settings.NoFailLockpick then
+            frame.B1.Bar.UIScale.Scale = 10
+            frame.B2.Bar.UIScale.Scale = 10
+            frame.B3.Bar.UIScale.Scale = 10
+        else
+            frame.B1.Bar.UIScale.Scale = 1
+            frame.B2.Bar.UIScale.Scale = 1
+            frame.B3.Bar.UIScale.Scale = 1
+        end
+    end
+end)
+
+-- =========================
+-- Adonis bypass
+-- =========================
+local g = getinfo or debug.getinfo
+local d = false
+local h = {}
+local x, y
+
+setthreadidentity(2)
+
+for i, v in getgc(true) do
+    if typeof(v) == "table" then
+        local a = rawget(v, "Detected")
+        local b = rawget(v, "Kill")
+
+        if typeof(a) == "function" and not x then
+            x = a
+            local o; o = hookfunction(x, function(c, f, n)
+                if c ~= "_" then
+                    if d then
+                        warn(`Adonis AntiCheat flagged\nMethod: {c}\nInfo: {f}`)
+                    end
+                end
+                return true
+            end)
+            table.insert(h, x)
+        end
+
+        if rawget(v, "Variables") and rawget(v, "Process") and typeof(b) == "function" and not y then
+            y = b
+            local o; o = hookfunction(y, function(f)
+                if d then
+                    warn(`Adonis AntiCheat tried to kill (fallback): {f}`)
+                end
+            end)
+            table.insert(h, y)
+        end
     end
 end
 
-task.spawn(function()
-    while task.wait(0.5) do
-        if Settings.InstantInteractEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            local root = LocalPlayer.Character.HumanoidRootPart
-            for _, prompt in ipairs(workspace:GetDescendants()) do
-                if prompt:IsA("ProximityPrompt") and prompt.Enabled then
-                    local parentPart = prompt.Parent:FindFirstChildWhichIsA("BasePart")
-                    if parentPart and (root.Position - parentPart.Position).Magnitude <= 12 then
-                        setupPrompt(prompt)
-                    end
-                end
-            end
+local o; o = hookfunction(getrenv().debug.info, newcclosure(function(...)
+    local a, f = ...
+    if x and a == x then
+        if d then
+            warn(`zins | adonis bypassed`)
         end
+        return coroutine.yield(coroutine.running())
     end
-end)
+    return o(...)
+end))
+setthreadidentity(7)
 
-print("UniScript BETA Loaded with Instant Interact and draggable UI")
+-- =========================
+print("UniScript BETA Loaded")
